@@ -1,60 +1,129 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-    <title>Mini Evade Clone</title>
+    <meta charset="UTF-8">
+    <title>EVADE BROWSER CLONE</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
-        #ui { position: absolute; top: 10px; left: 10px; color: white; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; color: white; user-select: none; }
+        
+        /* ГЛАВНОЕ МЕНЮ */
+        #main-menu {
+            position: absolute; width: 100%; height: 100%;
+            background: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url('https://i.imgur.com');
+            background-size: cover; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10;
+        }
+        .logo { font-size: 80px; font-weight: bold; font-style: italic; color: #fff; text-shadow: 4px 4px #ff0000; margin-bottom: 20px; }
+        .menu-btn {
+            width: 250px; padding: 15px; margin: 10px; background: rgba(255,255,255,0.1);
+            border: 2px solid #fff; color: #fff; font-size: 20px; cursor: pointer; transition: 0.3s;
+        }
+        .menu-btn:hover { background: #fff; color: #000; }
+
+        /* ИНВЕНТАРЬ */
+        #inventory {
+            display: none; position: absolute; top: 10%; left: 10%; width: 80%; height: 80%;
+            background: rgba(0,0,0,0.9); border: 3px solid #ff0000; z-index: 11; padding: 20px;
+        }
+        .inventory-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .item-card { border: 1px solid #fff; padding: 10px; text-align: center; background: #222; }
+        .item-card img { width: 50px; }
+
+        /* ИГРОВОЙ ИНТЕРФЕЙС */
+        #game-ui { display: none; position: absolute; width: 100%; height: 100%; pointer-events: none; }
+        #timer { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); font-size: 30px; }
+        #joystick { position: absolute; bottom: 50px; left: 50px; width: 100px; height: 100px; background: rgba(255,255,255,0.2); border-radius: 50%; pointer-events: auto; }
+        
+        canvas { display: block; }
     </style>
 </head>
 <body>
-    <div id="ui">Беги! (Стрелки или WASD) <br> Скины: ВСЕ ОТКРЫТЫ</div>
-    <canvas id="game"></canvas>
 
+    <!-- Меню -->
+    <div id="main-menu">
+        <div class="logo">EVADE</div>
+        <button class="menu-btn" onclick="startGame()">ИГРАТЬ</button>
+        <button class="menu-btn" onclick="openInv()">ИНВЕНТАРЬ (ВСЁ ОТКРЫТО)</button>
+        <button class="menu-btn">МАГАЗИН</button>
+    </div>
+
+    <!-- Инвентарь -->
+    <div id="inventory">
+        <h2>ВАШЕ СНАРЯЖЕНИЕ</h2>
+        <div class="inventory-grid">
+            <div class="item-card"><b>ОБУНГА</b><br>Статус: ВЫБРАНО</div>
+            <div class="item-card"><b>НИКО</b><br>Статус: РАЗБЛОКИРОВАНО</div>
+            <div class="item-card"><b>КИТ-КАТ</b><br>Статус: РАЗБЛОКИРОВАНО</div>
+            <div class="item-card"><b>ЭМОЦИЯ: ТАНЕЦ</b><br>Статус: ЕСТЬ</div>
+        </div>
+        <br>
+        <button class="menu-btn" onclick="closeInv()">ЗАКРЫТЬ</button>
+    </div>
+
+    <!-- Интерфейс игры -->
+    <div id="game-ui">
+        <div id="timer">00:00</div>
+        <div id="joystick"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com"></script>
     <script>
-        const canvas = document.getElementById('game');
-        const ctx = canvas.getContext('2d');
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+        let scene, camera, renderer, bot, player;
+        let isPlaying = false;
 
-        let player = { x: 100, y: 100, size: 20, speed: 5 };
-        let bot = { x: 500, y: 500, size: 40, speed: 3.5 };
-        let keys = {};
+        function init3D() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x020202);
+            scene.fog = new THREE.Fog(0x020202, 1, 30);
 
-        window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
-        window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
 
-        function update() {
-            // Движение игрока
-            if (keys['w'] || keys['arrowup']) player.y -= player.speed;
-            if (keys['s'] || keys['arrowdown']) player.y += player.speed;
-            if (keys['a'] || keys['arrowleft']) player.x -= player.speed;
-            if (keys['d'] || keys['arrowright']) player.x += player.speed;
+            // Пол (сетка как в Evade)
+            const grid = new THREE.GridHelper(100, 40, 0xff0000, 0x444444);
+            scene.add(grid);// Некстбот
+            const botTex = new THREE.TextureLoader().load('https://i.imgur.com');
+            const botMat = new THREE.SpriteMaterial({ map: botTex });
+            bot = new THREE.Sprite(botMat);
+            bot.scale.set(4, 4, 1);
+            bot.position.set(20, 2, -20);
+            scene.add(bot);
 
-            // Бот бежит за игроком
-            let dx = player.x - bot.x;
-            let dy = player.y - bot.y;
-            let dist = Math.sqrt(dx*dx + dy*dy);
-            bot.x += (dx / dist) * bot.speed;
-            bot.y += (dy / dist) * bot.speed;
-
-            if (dist < player.size + bot.size/2) {
-                alert("Поймали! Обнови страницу.");
-                player.x = 100; player.y = 100;
-            }
+            camera.position.y = 2;
         }
 
-        function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            // Игрок
-            ctx.fillStyle = '#0f0';
-            ctx.fillRect(player.x, player.y, player.size, player.size);
-            // Бот (Некстбот)
-            ctx.fillStyle = '#f00';
-            ctx.fillRect(bot.x, bot.y, bot.size, bot.size);
-            requestAnimationFrame(() => { update(); draw(); });
+        function startGame() {
+            document.getElementById('main-menu').style.display = 'none';
+            document.getElementById('game-ui').style.display = 'block';
+            isPlaying = true;
+            init3D();
+            animate();
         }
-        draw();
+
+        function openInv() { document.getElementById('inventory').style.display = 'block'; }
+        function closeInv() { document.getElementById('inventory').style.display = 'none'; }
+
+        function animate() {
+            if(!isPlaying) return;
+            requestAnimationFrame(animate);
+
+            // Движение бота за камерой
+            const speed = 0.1;
+            bot.position.x += (camera.position.x - bot.position.x) * 0.02;
+            bot.position.z += (camera.position.z - bot.position.z) * 0.02;
+            
+            // Управление WASD
+            window.onkeydown = (e) => {
+                if(e.code === 'KeyW') camera.translateZ(-0.5);
+                if(e.code === 'KeyS') camera.translateZ(0.5);
+                if(e.code === 'KeyA') camera.translateX(-0.5);
+                if(e.code === 'KeyD') camera.translateX(0.5);
+            };
+
+            renderer.render(scene, camera);
+        }
     </script>
 </body>
 </html>
