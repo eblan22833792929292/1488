@@ -1,129 +1,117 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>EVADE BROWSER CLONE</title>
+    <title>Evade Mobile Fixed</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; color: white; user-select: none; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Arial Black', sans-serif; touch-action: none; }
+        #game { display: block; width: 100vw; height: 100vh; }
+        #ui { position: absolute; top: 15px; left: 15px; color: white; text-shadow: 2px 2px #000; pointer-events: none; z-index: 10; }
         
-        /* ГЛАВНОЕ МЕНЮ */
-        #main-menu {
-            position: absolute; width: 100%; height: 100%;
-            background: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url('https://i.imgur.com');
-            background-size: cover; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10;
-        }
-        .logo { font-size: 80px; font-weight: bold; font-style: italic; color: #fff; text-shadow: 4px 4px #ff0000; margin-bottom: 20px; }
-        .menu-btn {
-            width: 250px; padding: 15px; margin: 10px; background: rgba(255,255,255,0.1);
-            border: 2px solid #fff; color: #fff; font-size: 20px; cursor: pointer; transition: 0.3s;
-        }
-        .menu-btn:hover { background: #fff; color: #000; }
+        /* Экран смерти */
+        #died { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(150,0,0,0.7); z-index: 100; flex-direction: column; align-items: center; justify-content: center; color: white; text-align: center; }
+        #died h1 { font-size: 70px; margin: 0; color: #ff0000; }
 
-        /* ИНВЕНТАРЬ */
-        #inventory {
-            display: none; position: absolute; top: 10%; left: 10%; width: 80%; height: 80%;
-            background: rgba(0,0,0,0.9); border: 3px solid #ff0000; z-index: 11; padding: 20px;
-        }
-        .inventory-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-        .item-card { border: 1px solid #fff; padding: 10px; text-align: center; background: #222; }
-        .item-card img { width: 50px; }
-
-        /* ИГРОВОЙ ИНТЕРФЕЙС */
-        #game-ui { display: none; position: absolute; width: 100%; height: 100%; pointer-events: none; }
-        #timer { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); font-size: 30px; }
-        #joystick { position: absolute; bottom: 50px; left: 50px; width: 100px; height: 100px; background: rgba(255,255,255,0.2); border-radius: 50%; pointer-events: auto; }
-        
-        canvas { display: block; }
+        /* Новый джойстик */
+        #joy-back { position: absolute; bottom: 40px; left: 40px; width: 100px; height: 100px; background: rgba(255,255,255,0.1); border-radius: 50%; border: 2px solid #fff; z-index: 50; }
+        #joy-knob { position: absolute; top: 25px; left: 25px; width: 50px; height: 50px; background: #fff; border-radius: 50%; opacity: 0.7; }
     </style>
 </head>
 <body>
 
-    <!-- Меню -->
-    <div id="main-menu">
-        <div class="logo">EVADE</div>
-        <button class="menu-btn" onclick="startGame()">ИГРАТЬ</button>
-        <button class="menu-btn" onclick="openInv()">ИНВЕНТАРЬ (ВСЁ ОТКРЫТО)</button>
-        <button class="menu-btn">МАГАЗИН</button>
+    <div id="ui">EVADE V2 <br> Все мемы разблокированы!</div>
+
+    <div id="died" onclick="location.reload()">
+        <h1>DIED</h1>
+        <p>НАЖМИ ДЛЯ РЕСТАРТА</p>
     </div>
 
-    <!-- Инвентарь -->
-    <div id="inventory">
-        <h2>ВАШЕ СНАРЯЖЕНИЕ</h2>
-        <div class="inventory-grid">
-            <div class="item-card"><b>ОБУНГА</b><br>Статус: ВЫБРАНО</div>
-            <div class="item-card"><b>НИКО</b><br>Статус: РАЗБЛОКИРОВАНО</div>
-            <div class="item-card"><b>КИТ-КАТ</b><br>Статус: РАЗБЛОКИРОВАНО</div>
-            <div class="item-card"><b>ЭМОЦИЯ: ТАНЕЦ</b><br>Статус: ЕСТЬ</div>
-        </div>
-        <br>
-        <button class="menu-btn" onclick="closeInv()">ЗАКРЫТЬ</button>
-    </div>
+    <div id="joy-back"><div id="joy-knob"></div></div>
+    <canvas id="game"></canvas>
 
-    <!-- Интерфейс игры -->
-    <div id="game-ui">
-        <div id="timer">00:00</div>
-        <div id="joystick"></div>
-    </div>
-
-    <script src="https://cdnjs.cloudflare.com"></script>
     <script>
-        let scene, camera, renderer, bot, player;
-        let isPlaying = false;
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
 
-        function init3D() {
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x020202);
-            scene.fog = new THREE.Fog(0x020202, 1, 30);
+        let player = { x: canvas.width/2, y: canvas.height/2, size: 20, speed: 6 };
+        let bot = { x: 0, y: 0, size: 80, speed: 4.5, img: new Image() };
+        bot.img.src = 'https://i.imgur.com'; // Обунга
 
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-            renderer = new THREE.WebGLRenderer();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            document.body.appendChild(renderer.domElement);
+        let joy = { x: 0, y: 0, active: false };
+        let isDead = false;
 
-            // Пол (сетка как в Evade)
-            const grid = new THREE.GridHelper(100, 40, 0xff0000, 0x444444);
-            scene.add(grid);// Некстбот
-            const botTex = new THREE.TextureLoader().load('https://i.imgur.com');
-            const botMat = new THREE.SpriteMaterial({ map: botTex });
-            bot = new THREE.Sprite(botMat);
-            bot.scale.set(4, 4, 1);
-            bot.position.set(20, 2, -20);
-            scene.add(bot);
+        // Управление джойстиком
+        const joyBack = document.getElementById('joy-back');
+        const knob = document.getElementById('joy-knob');
 
-            camera.position.y = 2;
-        }
-
-        function startGame() {
-            document.getElementById('main-menu').style.display = 'none';
-            document.getElementById('game-ui').style.display = 'block';
-            isPlaying = true;
-            init3D();
-            animate();
-        }
-
-        function openInv() { document.getElementById('inventory').style.display = 'block'; }
-        function closeInv() { document.getElementById('inventory').style.display = 'none'; }
-
-        function animate() {
-            if(!isPlaying) return;
-            requestAnimationFrame(animate);
-
-            // Движение бота за камерой
-            const speed = 0.1;
-            bot.position.x += (camera.position.x - bot.position.x) * 0.02;
-            bot.position.z += (camera.position.z - bot.position.z) * 0.02;
+        window.addEventListener('touchstart', e => { if(e.target === joyBack || e.target === knob) joy.active = true; });
+        window.addEventListener('touchmove', e => {
+            if(!joy.active) return;
+            let t = e.touches[0];
+            let rect = joyBack.getBoundingClientRect();
+            let dx = t.clientX - (rect.left + 50);
+            let dy = t.clientY - (rect.top + 50);
+            let dist = Math.sqrt(dx*dx + dy*dy);
+            let angle = Math.atan2(dy, dx);
+            let max = 40;
             
-            // Управление WASD
-            window.onkeydown = (e) => {
-                if(e.code === 'KeyW') camera.translateZ(-0.5);
-                if(e.code === 'KeyS') camera.translateZ(0.5);
-                if(e.code === 'KeyA') camera.translateX(-0.5);
-                if(e.code === 'KeyD') camera.translateX(0.5);
-            };
+            let moveX = Math.cos(angle) * Math.min(dist, max);
+            let moveY = Math.sin(angle) * Math.min(dist, max);
+            knob.style.transform = translate(${moveX}px, ${moveY}px);
+            
+            joy.x = Math.cos(angle) * (Math.min(dist, max) / max);
+            joy.y = Math.sin(angle) * (Math.min(dist, max) / max);
+        });
+        window.addEventListener('touchend', () => {
+            joy.active = false;
+            joy.x = 0; joy.y = 0;
+            knob.style.transform = translate(0px, 0px);
+        });
 
-            renderer.render(scene, camera);
+        function update() {
+            if(isDead) return;
+
+            // Движение игрока
+            player.x += joy.x * player.speed;
+            player.y += joy.y * player.speed;
+
+            // Бот преследует
+            let bdx = player.x - bot.x;
+            let bdy = player.y - bot.y;
+            let dist = Math.sqrt(bdx*bdx + bdy*bdy);
+            bot.x += (bdx / dist) * bot.speed;
+            bot.y += (bdy / dist) * bot.speed;
+
+            if(dist < 40) {
+                isDead = true;
+                document.getElementById('died').style.display = 'flex';
+            }
         }
+
+        function draw() {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);// Рисуем сетку (пол)
+            ctx.strokeStyle = '#222';
+            for(let i=0; i<canvas.width; i+=50) { ctx.beginPath(); ctx.moveTo(i-player.x%50, 0); ctx.lineTo(i-player.x%50, canvas.height); ctx.stroke(); }
+            for(let i=0; i<canvas.height; i+=50) { ctx.beginPath(); ctx.moveTo(0, i-player.y%50); ctx.lineTo(canvas.width, i-player.y%50); ctx.stroke(); }
+
+            // Рисуем игрока (зеленый фонарик)
+            ctx.fillStyle = '#0f0';
+            ctx.shadowBlur = 20; ctx.shadowColor = '#0f0';
+            ctx.beginPath(); ctx.arc(canvas.width/2, canvas.height/2, 10, 0, Math.PI*2); ctx.fill();
+            ctx.shadowBlur = 0;
+
+            // Рисуем бота относительно игрока
+            let relX = bot.x - player.x + canvas.width/2;
+            let relY = bot.y - player.y + canvas.height/2;
+            ctx.drawImage(bot.img, relX - bot.size/2, relY - bot.size/2, bot.size, bot.size);
+
+            update();
+            requestAnimationFrame(draw);
+        }
+        draw();
     </script>
 </body>
 </html>
